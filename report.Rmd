@@ -83,15 +83,18 @@ addMarkers(lng=9.501531, lat=47.214083, popup="The birthplace of R")
 In addition to the data resources introduced above, we will be using the policy and restriction factors deployed in Liechtenstein to control the pandemic. The figure below shows the restriction/policy level deployed in Liechtenstein to control the pandemic. Obviously the higher value the stricter/harder policy. 
 
 ```{r Fig.3, fig.align="center",fig.cap="\\label{fig:figs}COVID-19 related restricts and policies"}
+tiff('SARIMA02.tiff', units="in", width=10, height=4, res=300, compression = 'lzw')
 col<-colorRampPalette(c("white","red"))
-par(mai=c(1.5,2.5,0.5,0.6))
+par(mai=c(1.5,3.5,0.5,1.6))
 plot(t(EPD[,-(1:5)]),main="degree of restriction",xlab="",ylab="",col=col,las=2)
+dev.off()
 ```
 
 ## Correlation analysis
 Since multiple sources of time series/datasets are used to model/predict the Covid-19 prevalence, it might be worth to look in a simple Spearman correlation plot before diving in the modelling and data analysis. The correlogram shown in the figure below, shows the correlation value and magnitude for all pairs of time series used in this study. To simplify the labeling, an alphabetic labels are used for the time series in the study. Zt, stands for the Covid-19 incidence in the WWTP watershed. The Table followed by the Figure shows the labels and their original equivalent ones.
 
 ```{r Fig.4, fig.align="center",fig.cap="\\label{fig:figs}Corrologram"}
+tiff('SARIMA03.tiff', units="in", width=10, height=4, res=300, compression = 'lzw')
 data<-data.frame(activeCase=activeCases,
                  SarsCov2Load=SAR$SarsCoV2_Load_.Giga_copied.day...copies.ml.,
                  GMD=GMD,EPD[,-c(1:3)])
@@ -100,6 +103,7 @@ originalLabels<-colnames(data)
 colnames(data)<-labels
 M<-cor(data,method = "spearman") # spearman correlation coefficient
 corrplot(M, method = 'ellipse', type = 'lower',col = COL2('PiYG'))
+dev.off()
 ```
 ```{r,eval=TRUE,echo=FALSE}
 labels<-labels[order(nchar(originalLabels),decreasing = TRUE)]
@@ -141,6 +145,7 @@ The MK trend test showed that the time series requires differentiation. Given th
 
 ```{r Fig.5, fig.align="center",fig.cap="\\label{fig:figs} Normality checks"}
 # normality tests and plots
+tiff('SARIMA04.tiff', units="in", width=10, height=4, res=300, compression = 'lzw')
 par(mfrow=c(1,2))
 hist(zt,prob=TRUE,main="SarsCov2 Prevelance",xlab="Prevelance")
 lines(density(zt,50))
@@ -151,12 +156,14 @@ legend("topleft",
        legend=c("Shapiro-Wilk Test",
                 sprintf("p.value= %f",p.value)),
        bty="n",cex=0.7)
+dev.off()
 ```
 
 As it is clear from the both histogram and qqplot as well as Shapiro-wilk test, the time series is not normally distributed and requires further manipulation. In order to normalize the time-series, a BoxCox transformation is used to normalize the dataset. The BoxCox parameter, lambda, will be optimized using a very simple grid search with the precision of 0.01. Once we have the BoxCox transformed time series, we can plot the ACF and PACF. t
 he code chunk below computes the method parameter and will plot the transformed time-series ACF plots.
 ```{r Fig.6, fig.align="center",fig.cap="\\label{fig:figs} ACF and PACF of the transformed timeseries"}
 # 95% confidence >> alpha = 1.00-0.95
+tiff('SARIMA05.tiff', units="in", width=6, height=4, res=300, compression = 'lzw')
 if(p.value<0.05)
 {
    #boxcox parameters optimization
@@ -168,11 +175,14 @@ if(p.value<0.05)
    zt<-zt-offset
    zt<-((zt^lambda)-1)/lambda #boxcox transformation
 }
+dev.off()
 
 # plot ACF & PAC
+tiff('SARIMA06.tiff', units="in", width=10, height=4, res=300, compression = 'lzw')
 par(mfrow=c(1,2))
 acf (zt,main="",length(zt)/4)
 pacf(zt,main="",length(zt)/4)
+dev.off()
 ```
 
 ## Univariate modelling: First strategy
@@ -221,26 +231,31 @@ According to the simulation experiments performed, the AIC metrics for evaluated
 
 ```{r Fig.7, fig.align="center",fig.cap="\\label{fig:figs} AIC metric for calibration period"}
 # drawing best 5% AIC scores for calibration data and the best selected model forecast
-par(mfrow=c(1,2))
+tiff('SARIMA07.tiff', units="in", width=6, height=4, res=300, compression = 'lzw')
+#par(mfrow=c(1,2))
 plot(AIC,xlab="model choices")
 abline(h=quantile(AIC,0.05,na.rm = TRUE),lwd=2,col="red",lty=2)
+dev.off()
 
 # picking the best model structure using calobration AIC among the top 5% models
 candidates<-modelChoices[AIC<quantile(AIC,0.05,na.rm=TRUE),]
-bestChice<-as.numeric(names(which.min(apply(candidates,1,sum))))
+bestChoice<-as.numeric(names(which.min(apply(candidates,1,sum))))
 
 # simulating the best selected model based on calibration data
-params<-as.matrix(modelChoices[bestChice,])
+tiff('SARIMA08.tiff', units="in", width=6, height=4, res=300, compression = 'lzw')
+params<-as.matrix(modelChoices[bestChoice,])
 model<-arima(x=newData$zt[CalibrationPeriod],order=c(params[1],1,params[2]),
       seasonal =list(order = c(params[3],1,params[4]), period = 8))
-plot(forecast(model,length(validationPeriod),0.95),main="",xlab="Time step",ylab="incidence")
+plot(forecast(model,length(validationPeriod),0.95),main="",xlab="Time step (week)",ylab="incidence")
 lines(validationPeriod,newData$zt[validationPeriod],lty="dashed")
+dev.off()
 ```
 
 Despite the pretty acceptable performance of the SARIMA model, it might be beneficial to look into the diagnostic metrics for the validation horizon while selecting  model structure. 
 
 ```{r Fig.8, fig.align="center",fig.cap="\\label{fig:figs} Taylor diagram and selcted model based on the validation set"}
-par(mfrow=c(1,2))
+tiff('SARIMA09.tiff', units="in", width=6, height=4, res=300, compression = 'lzw')
+#par(mfrow=c(1,2))
 # plot Taylor diagram for model selection
 models<-c(t(matrix(rep(paste("model",1:nrow(modelChoices)),
      length(validationPeriod)),nrow(modelChoices),length(validationPeriod))))
@@ -249,6 +264,7 @@ missingModels<-paste("model",which(is.na(diagMatrix[,1])))
 for(i in 1:length(missingModels)) dat<-dat[!(dat$group==missingModels[i]),]
 TaylorDiagram(mydata = dat,obs = "obs",mod="mod",group="group")
 rownames(diagMatrix)<-1:nrow(diagMatrix)
+dev.off
 
 # Model selection using a two filter stage: RMS and Correlation filtering
 RMSBasedCandid<-diagMatrix[diagMatrix[,2]<
@@ -262,8 +278,10 @@ model<-arima(x=newData$zt[CalibrationPeriod],order=c(params[1],1,params[2]),
       seasonal =list(order = c(params[3],1,params[4]), period = 12))
 
 # plot selected model outputs based on validation set
+tiff('SARIMA10.tiff', units="in", width=6, height=4, res=300, compression = 'lzw')
 plot(forecast(model,length(validationPeriod),0.95),main="",xlab="time step",ylab="incidences")
 lines(validationPeriod,newData$zt[validationPeriod],lty="dashed")
+dev.off()
 ```
 
 ## Univariate modelling with Google mobility data: Second strategy
