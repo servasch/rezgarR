@@ -8,14 +8,14 @@ fig_caption: yes
 
 ```{r setup, include=FALSE,warning=FALSE,message=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-install.packages("leaflet")
-install.packages("corrplot")
-install.packages("EnvStats")
-install.packages("Ecfun")
-install.packages("trend")
-install.packages("openair")
-install.packages("plot.matrix")
-install.packages("forecast")
+#install.packages("leaflet")
+#install.packages("corrplot")
+#install.packages("EnvStats")
+#install.packages("Ecfun")
+#install.packages("trend")
+#install.packages("openair")
+#install.packages("plot.matrix")
+#install.packages("forecast")
 library(leaflet)
 library(corrplot)
 library(EnvStats)
@@ -83,18 +83,15 @@ addMarkers(lng=9.501531, lat=47.214083, popup="The birthplace of R")
 In addition to the data resources introduced above, we will be using the policy and restriction factors deployed in Liechtenstein to control the pandemic. The figure below shows the restriction/policy level deployed in Liechtenstein to control the pandemic. Obviously the higher value the stricter/harder policy. 
 
 ```{r Fig.3, fig.align="center",fig.cap="\\label{fig:figs}COVID-19 related restricts and policies"}
-tiff('SARIMA02.tiff', units="in", width=10, height=4, res=300, compression = 'lzw')
 col<-colorRampPalette(c("white","red"))
-par(mai=c(1.5,3.5,0.5,1.6))
+par(mai=c(1.5,2.5,0.5,0.6))
 plot(t(EPD[,-(1:5)]),main="degree of restriction",xlab="",ylab="",col=col,las=2)
-dev.off()
 ```
 
 ## Correlation analysis
 Since multiple sources of time series/datasets are used to model/predict the Covid-19 prevalence, it might be worth to look in a simple Spearman correlation plot before diving in the modelling and data analysis. The correlogram shown in the figure below, shows the correlation value and magnitude for all pairs of time series used in this study. To simplify the labeling, an alphabetic labels are used for the time series in the study. Zt, stands for the Covid-19 incidence in the WWTP watershed. The Table followed by the Figure shows the labels and their original equivalent ones.
 
 ```{r Fig.4, fig.align="center",fig.cap="\\label{fig:figs}Corrologram"}
-tiff('SARIMA03.tiff', units="in", width=10, height=4, res=300, compression = 'lzw')
 data<-data.frame(activeCase=activeCases,
                  SarsCov2Load=SAR$SarsCoV2_Load_.Giga_copied.day...copies.ml.,
                  GMD=GMD,EPD[,-c(1:3)])
@@ -103,12 +100,11 @@ originalLabels<-colnames(data)
 colnames(data)<-labels
 M<-cor(data,method = "spearman") # spearman correlation coefficient
 corrplot(M, method = 'ellipse', type = 'lower',col = COL2('PiYG'))
-dev.off()
 ```
 ```{r,eval=TRUE,echo=FALSE}
 labels<-labels[order(nchar(originalLabels),decreasing = TRUE)]
 originalLabels<-originalLabels[order(nchar(originalLabels),decreasing = TRUE)]
-data.frame(cbind(labels,originalLabels))
+knitr::kable(data.frame(cbind(labels,originalLabels)))
 ```
 
 According to the correlogram, the variables with a significant correlation with Zt are: `r originalLabels[match(names(which(sort(abs(M[-1,1]),decreasing = TRUE)>0.1)),labels)]`. 
@@ -118,6 +114,7 @@ In this study a families of ARIMA models will be checked and evaluated. Upon a v
 The modelling will be conducted with three different approaches and objectives:
 
 * Single variable model (Zt)
+* Single variable model (Zt) with wastewatr
 * Single variable model (Zt) with Google mobility data as exogenous variable 
 * Single variable model (Zt) with Google mobility and policy time-series as exogenous variable 
 
@@ -138,14 +135,13 @@ if(p.value>0.05)
 {
    zt<-diff(zt)
 }
-zt<-diff(zt,lag=12)
+zt<-diff(zt,lag=6)
 ```
 
 The MK trend test showed that the time series requires differentiation. Given that the time series trend is stabilized using the diff function, then we will go with the normality checking. A very straightforward to check the data normality can be via histogram or qqplot. the chuck code below will take care of this and returns a figure of two panels showing both digrams. 
 
 ```{r Fig.5, fig.align="center",fig.cap="\\label{fig:figs} Normality checks"}
 # normality tests and plots
-tiff('SARIMA04.tiff', units="in", width=10, height=4, res=300, compression = 'lzw')
 par(mfrow=c(1,2))
 hist(zt,prob=TRUE,main="SarsCov2 Prevelance",xlab="Prevelance")
 lines(density(zt,50))
@@ -156,14 +152,12 @@ legend("topleft",
        legend=c("Shapiro-Wilk Test",
                 sprintf("p.value= %f",p.value)),
        bty="n",cex=0.7)
-dev.off()
 ```
 
 As it is clear from the both histogram and qqplot as well as Shapiro-wilk test, the time series is not normally distributed and requires further manipulation. In order to normalize the time-series, a BoxCox transformation is used to normalize the dataset. The BoxCox parameter, lambda, will be optimized using a very simple grid search with the precision of 0.01. Once we have the BoxCox transformed time series, we can plot the ACF and PACF. t
 he code chunk below computes the method parameter and will plot the transformed time-series ACF plots.
 ```{r Fig.6, fig.align="center",fig.cap="\\label{fig:figs} ACF and PACF of the transformed timeseries"}
 # 95% confidence >> alpha = 1.00-0.95
-tiff('SARIMA05.tiff', units="in", width=6, height=4, res=300, compression = 'lzw')
 if(p.value<0.05)
 {
    #boxcox parameters optimization
@@ -175,23 +169,28 @@ if(p.value<0.05)
    zt<-zt-offset
    zt<-((zt^lambda)-1)/lambda #boxcox transformation
 }
-dev.off()
 
 # plot ACF & PAC
-tiff('SARIMA06.tiff', units="in", width=10, height=4, res=300, compression = 'lzw')
 par(mfrow=c(1,2))
 acf (zt,main="",length(zt)/4)
 pacf(zt,main="",length(zt)/4)
-dev.off()
+```
+
+##Probing the four strategies:
+Initially the data is sorted:
+```{r, warning=FALSE}
+
+# copying original data
+newData<-data
+newData$zt[8:61]<-zt
+newData<-newData[-(1:7),]
+
 ```
 
 ## Univariate modelling: First strategy
 
 As seen from the ACF, there are evidences of periodic behavior in the time series and at lags 1 and 12 the ACF values crosses the 95% significant levels. However, the PACF spikes at lag 8 corresponding to a full period of cycle in the time series (two months). To find a best model structure the parameter of seasonal and arima components are explored in a wide range of plausible values using the chunk code blow. Then every model structures are checked for the validation period using a range of model diagnostics, i.e. RMS and correlation.
 ```{r, warning=FALSE}
-# copying original data
-newData<-data
-newData$zt<-((newData$zt^lambda)-1)/lambda
 
 # creating plausible model choices
 p<-0:2
@@ -200,8 +199,8 @@ P<-0:2
 Q<-0:2
 modelChoices<-expand.grid(p,q,P,Q)
 AIC<-rep(NA,nrow(modelChoices))
-CalibrationPeriod<-1:round(0.8*nrow(data))
-validationPeriod<-(1:nrow(data))[-CalibrationPeriod]
+CalibrationPeriod<-1:round(0.8*nrow(newData))
+validationPeriod<-(1:nrow(newData))[-CalibrationPeriod]
 diagMatrix<-matrix(NA,nrow(modelChoices),2)
 zhat<-matrix(NA,nrow(modelChoices),length(validationPeriod))
 rownames(zhat)<-paste("model",1:nrow(zhat))
@@ -222,6 +221,7 @@ for(i in 1:nrow(modelChoices))
       zhat[i,]<-forecast(model,length(validationPeriod))$mean
       Zobs<-newData$zt[validationPeriod]
       diagMatrix[i,1]<-cor(zhat[i,],Zobs)
+      
       diagMatrix[i,2]<-(sum((zhat[i,]-Zobs)^2)/(length(zhat[i,])-1))^0.5
    }
 }
@@ -231,31 +231,26 @@ According to the simulation experiments performed, the AIC metrics for evaluated
 
 ```{r Fig.7, fig.align="center",fig.cap="\\label{fig:figs} AIC metric for calibration period"}
 # drawing best 5% AIC scores for calibration data and the best selected model forecast
-tiff('SARIMA07.tiff', units="in", width=6, height=4, res=300, compression = 'lzw')
-#par(mfrow=c(1,2))
+par(mfrow=c(1,2))
 plot(AIC,xlab="model choices")
 abline(h=quantile(AIC,0.05,na.rm = TRUE),lwd=2,col="red",lty=2)
-dev.off()
 
 # picking the best model structure using calobration AIC among the top 5% models
 candidates<-modelChoices[AIC<quantile(AIC,0.05,na.rm=TRUE),]
-bestChoice<-as.numeric(names(which.min(apply(candidates,1,sum))))
+bestChice<-as.numeric(names(which.min(apply(candidates,1,sum))))
 
 # simulating the best selected model based on calibration data
-tiff('SARIMA08.tiff', units="in", width=6, height=4, res=300, compression = 'lzw')
-params<-as.matrix(modelChoices[bestChoice,])
+params<-as.matrix(modelChoices[bestChice,])
 model<-arima(x=newData$zt[CalibrationPeriod],order=c(params[1],1,params[2]),
       seasonal =list(order = c(params[3],1,params[4]), period = 8))
-plot(forecast(model,length(validationPeriod),0.95),main="",xlab="Time step (week)",ylab="incidence")
+plot(forecast(model,length(validationPeriod),0.95),main="",xlab="Time step",ylab="incidence")
 lines(validationPeriod,newData$zt[validationPeriod],lty="dashed")
-dev.off()
 ```
 
 Despite the pretty acceptable performance of the SARIMA model, it might be beneficial to look into the diagnostic metrics for the validation horizon while selecting  model structure. 
 
 ```{r Fig.8, fig.align="center",fig.cap="\\label{fig:figs} Taylor diagram and selcted model based on the validation set"}
-tiff('SARIMA09.tiff', units="in", width=6, height=4, res=300, compression = 'lzw')
-#par(mfrow=c(1,2))
+par(mfrow=c(1,2))
 # plot Taylor diagram for model selection
 models<-c(t(matrix(rep(paste("model",1:nrow(modelChoices)),
      length(validationPeriod)),nrow(modelChoices),length(validationPeriod))))
@@ -264,7 +259,6 @@ missingModels<-paste("model",which(is.na(diagMatrix[,1])))
 for(i in 1:length(missingModels)) dat<-dat[!(dat$group==missingModels[i]),]
 TaylorDiagram(mydata = dat,obs = "obs",mod="mod",group="group")
 rownames(diagMatrix)<-1:nrow(diagMatrix)
-dev.off
 
 # Model selection using a two filter stage: RMS and Correlation filtering
 RMSBasedCandid<-diagMatrix[diagMatrix[,2]<
@@ -278,20 +272,18 @@ model<-arima(x=newData$zt[CalibrationPeriod],order=c(params[1],1,params[2]),
       seasonal =list(order = c(params[3],1,params[4]), period = 12))
 
 # plot selected model outputs based on validation set
-tiff('SARIMA10.tiff', units="in", width=6, height=4, res=300, compression = 'lzw')
 plot(forecast(model,length(validationPeriod),0.95),main="",xlab="time step",ylab="incidences")
 lines(validationPeriod,newData$zt[validationPeriod],lty="dashed")
-dev.off()
 ```
 
-## Univariate modelling with Google mobility data: Second strategy
+## Univariate modelling with wastewater data: Second strategy
 
-As described before in this section, an experiment will be conducted to explore in the model structure space to find a optimum model configuration based on the validation set. All experiments are performed using the below chunk codes and the best model configuration is selected. Then the model performance, i.e. fitness, is drawn for both evaluation time horizons as shown in the figure below. According the figure the fitness has improved significantly compared with the univariate model without exogenous variables - indicating the implication of social distancing and mobility data in the prediction of the fate of virus.
+As described before in this section, an experiment will be conducted to explore in the model structure space to find a optimum model configuration based on the validation set. All experiments are performed using the below chunk codes and the best model configuration is selected. Then the model performance, i.e. fitness, is drawn for both evaluation time horizons as shown in the figure below. According the figure the fitness has improved significantly compared with the univariate model without exogenous variables - indicating the implication of WBE in the prediction of the fate of virus.
 
 ```{r, warning=FALSE}
 # copying original data
-newData<-data
-newData$zt<-((newData$zt^lambda)-1)/lambda
+
+exgData<-SAR[,"SarsCoV2_Titer..copies.ml.",drop=FALSE]
 
 # creating plausible model choices
 p<-0:2
@@ -300,8 +292,73 @@ P<-0:2
 Q<-0:2
 modelChoices<-expand.grid(p,q,P,Q)
 AIC<-rep(NA,nrow(modelChoices))
-CalibrationPeriod<-1:round(0.8*nrow(data))
-validationPeriod<-(1:nrow(data))[-CalibrationPeriod]
+CalibrationPeriod<-1:round(0.8*nrow(newData))
+validationPeriod<-(1:nrow(newData))[-CalibrationPeriod]
+diagMatrix<-matrix(NA,nrow(modelChoices),2)
+zhat<-matrix(NA,nrow(modelChoices),length(validationPeriod))
+rownames(zhat)<-paste("model",1:nrow(zhat))
+
+for(i in 1:nrow(modelChoices))
+{
+   p<-modelChoices[i,1]
+   q<-modelChoices[i,2]
+   P<-modelChoices[i,3]
+   Q<-modelChoices[i,4]
+   out<-tryCatch(expr=arima(x=newData$zt[CalibrationPeriod],order=c(p,1,q),
+                            xreg = exgData[CalibrationPeriod,,drop=FALSE],
+                            seasonal =list(order = c(P,1,Q), period = 12)),
+                 error   = function(e){TRUE})
+   if(class(out)=="Arima")
+   {
+      model<-out
+      AIC[i]<-model$aic
+      zhat[i,]<-predict(model,n.ahead = length(validationPeriod),
+                        newxreg =exgData[validationPeriod,,drop=FALSE])$pred
+      Zobs<-newData$zt[validationPeriod]
+      diagMatrix[i,1]<-cor(zhat[i,],Zobs)
+      diagMatrix[i,2]<-(sum((zhat[i,]-Zobs)^2)/(length(zhat[i,])-1))^0.5
+   }
+}
+```
+```{r Fig.9, fig.align="center",fig.cap="\\label{fig:figs} Model fitness with support of google Mobility data"}
+rownames(diagMatrix)<-1:nrow(diagMatrix)
+RMSBasedCandid<-diagMatrix[diagMatrix[,2]<
+                  quantile(diagMatrix[,2],0.05,na.rm=TRUE),,drop=FALSE]
+CorrRMSBest<- RMSBasedCandid[RMSBasedCandid[,1]>
+                  quantile(RMSBasedCandid[,1],0.95,na.rm=TRUE),,drop=FALSE]
+CorrRMSBest<-CorrRMSBest[!is.na(rownames(CorrRMSBest)),,drop=FALSE]
+topModels<-modelChoices[match(rownames(CorrRMSBest),rownames(modelChoices)),]
+params<-as.matrix(topModels[which.min(apply(topModels,1,sum)),])
+model<-arima(x=newData$zt[CalibrationPeriod],order=c(params[1],1,params[2]),
+             xreg = exgData[CalibrationPeriod,,drop=FALSE],
+             seasonal =list(order = c(params[3],1,params[4]), period = 12))
+
+# plot selected model outputs based on validation set
+zhatValid<-predict(model,n.ahead=length(validationPeriod),
+          newxreg=exgData[validationPeriod,,drop=FALSE])$pred
+zhatCalib<-fitted(model)
+plot(newData$zt,typ='l',ylab="incidence",xlab="Time step",ylim=range(zhatCalib))
+lines(CalibrationPeriod,zhatCalib ,col="red")
+lines(validationPeriod,zhatValid,col="red",lty="dashed")
+```
+
+
+## Univariate modelling with Google mobility data: third strategy
+
+As described before in this section, an experiment will be conducted to explore in the model structure space to find a optimum model configuration based on the validation set. All experiments are performed using the below chunk codes and the best model configuration is selected. Then the model performance, i.e. fitness, is drawn for both evaluation time horizons as shown in the figure below. According the figure the fitness has improved significantly compared with the univariate model without exogenous variables - indicating the implication of social distancing and mobility data in the prediction of the fate of virus.
+
+
+```{r, warning=FALSE}
+# copying original data
+# creating plausible model choices
+p<-0:2
+q<-0:2
+P<-0:2
+Q<-0:2
+modelChoices<-expand.grid(p,q,P,Q)
+AIC<-rep(NA,nrow(modelChoices))
+CalibrationPeriod<-1:round(0.8*nrow(newData))
+validationPeriod<-(1:nrow(newData))[-CalibrationPeriod]
 diagMatrix<-matrix(NA,nrow(modelChoices),2)
 zhat<-matrix(NA,nrow(modelChoices),length(validationPeriod))
 rownames(zhat)<-paste("model",1:nrow(zhat))
@@ -350,14 +407,12 @@ lines(CalibrationPeriod,zhatCalib ,col="red")
 lines(validationPeriod,zhatValid,col="red",lty="dashed")
 ```
 
-## Sensitivity analysis of univariate model to the exegenous variables: Third strategy
+## Sensitivity analysis of univariate model to the exegenous variables: forth strategy
 In this strategy, the target is measuring the sensitivity of the model respect to the exogenous variables. The experiments are performed like the previous strategies expect the experiments are performed equal to the number of exogenous variables in which for given trial the model is evaluated across all plausible structures under the absence of an exogenous variable. The procedure is repeated for all variables. 
 
 ```{r, warning=FALSE,eval=FALSE}
 ##### WARNING: very computationally expensive chunk
 # copying original data
-newData<-data
-newData$zt<-((newData$zt^lambda)-1)/lambda
 newData<-newData[,-ncol(newData)]
 
 # creating plausible model choices
@@ -368,8 +423,8 @@ Q<-0:1
 modelChoices<-expand.grid(p,q,P,Q)
 rownames(modelChoices)<-1:nrow(modelChoices)
 AIC<-matrix(NA,nrow(modelChoices),ncol(newData)-1)
-CalibrationPeriod<-1:round(0.8*nrow(data))
-validationPeriod<-(1:nrow(data))[-CalibrationPeriod]
+CalibrationPeriod<-1:round(0.8*nrow(newData))
+validationPeriod<-(1:nrow(newData))[-CalibrationPeriod]
 diagMatrix<-array(NA,c(nrow(modelChoices),2,ncol(newData)-1))
 zhat<-array(NA,c(nrow(modelChoices),length(validationPeriod),ncol(newData)-1))
 
