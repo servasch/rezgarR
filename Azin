@@ -1,0 +1,6 @@
+#install.packages("dplyr")
+library(dplyr)
+
+epdVor=subset(x, administrative_area_level_2=="Vorarlberg")
+epdVor1=select(epdVor, date , confirmed , deaths , recovered)
+write.csv(epdVor1,"./datasets4/epdVor.csv", row.names = FALSE)
